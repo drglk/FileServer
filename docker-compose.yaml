@@ -1,0 +1,62 @@
+networks:
+  prod:
+
+services:
+  migrator:
+    build: ./tools/migrator
+    container_name: migrator
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_ADDR: ${POSTGRES_ADDR}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - prod
+  redis:
+    build: ./tools/redis
+    container_name: redis
+    env_file: .env
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+    networks:
+      - prod
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep PONG"]
+      interval: 2s
+      retries: 20
+      start_period: 10s
+  api:
+    volumes:
+     - ./storage/files:/app/storage/files
+    build: .
+    container_name: "API"
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - prod
+    ports:
+      - "8082:8082"
+  postgres:
+    image: postgres:13.3
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
+    networks:
+      - prod
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}"]
+      interval: 2s
+      retries: 10
+      start_period: 10s

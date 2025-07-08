@@ -1,0 +1,8 @@
+{
+  "token": "valid-token",
+  "name": "testfile.txt",
+  "mime": "text/plain",
+  "is_file": true,
+  "is_public": true,
+  "grant": ["user2"]
+}

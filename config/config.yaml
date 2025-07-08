@@ -1,0 +1,15 @@
+env: "local" #local, dev, prod
+
+http_server:
+  address: "0.0.0.0:8082"
+  timeout: 1s
+  idle_timeout: 60s
+
+cache:
+ session_ttl: 1h
+ documents_ttl: 30s
+
+file_storage:
+  path: "./storage/files/"
+
+admin_token: "asfogo1k24asgfosk"
