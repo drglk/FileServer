@@ -137,7 +137,7 @@ func (a *AuthService) UserByToken(ctx context.Context, token string) (*models.Us
 
 	log.Debug("attempting to get user id by token")
 
-	userJSON, err := a.sessionStorer.GetUserByToken(ctx, token)
+	userJSON, err := a.sessionStorer.UserByToken(ctx, token)
 	if err != nil {
 		if errors.Is(err, models.ErrSessionNotFound) {
 			log.Warn("failed to get user id by token", slog.String("token", token), slog.String("error", err.Error()))

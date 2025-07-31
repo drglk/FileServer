@@ -52,7 +52,7 @@ func (m *MockSessionStorer) DeleteSession(ctx context.Context, token string) err
 	return args.Error(0)
 }
 
-func (m *MockSessionStorer) GetUserByToken(ctx context.Context, token string) (string, error) {
+func (m *MockSessionStorer) UserByToken(ctx context.Context, token string) (string, error) {
 	args := m.Called(ctx, token)
 	return args.String(0), args.Error(1)
 }
@@ -246,7 +246,7 @@ func TestUserByToken_SessionNotFound(t *testing.T) {
 
 	service := New(slog.Default(), nil, nil, mockSessions, "")
 
-	mockSessions.On("GetUserByToken", mock.Anything, "badtoken").
+	mockSessions.On("UserByToken", mock.Anything, "badtoken").
 		Return("", models.ErrSessionNotFound)
 
 	user, err := service.UserByToken(context.Background(), "badtoken")
@@ -259,7 +259,7 @@ func TestUserByToken_SessionFails(t *testing.T) {
 
 	service := New(slog.Default(), nil, nil, mockSessions, "")
 
-	mockSessions.On("GetUserByToken", mock.Anything, "token123").
+	mockSessions.On("UserByToken", mock.Anything, "token123").
 		Return("", errors.New("redis down"))
 
 	user, err := service.UserByToken(context.Background(), "token123")
@@ -272,7 +272,7 @@ func TestUserByToken_UnmarshalFails(t *testing.T) {
 
 	service := New(slog.Default(), nil, nil, mockSessions, "")
 
-	mockSessions.On("GetUserByToken", mock.Anything, "token123").
+	mockSessions.On("UserByToken", mock.Anything, "token123").
 		Return("invalid-json", nil)
 
 	user, err := service.UserByToken(context.Background(), "token123")
@@ -291,7 +291,7 @@ func TestUserByToken_Success(t *testing.T) {
 	}
 	userJSON, _ := json.Marshal(user)
 
-	mockSessions.On("GetUserByToken", mock.Anything, "token123").
+	mockSessions.On("UserByToken", mock.Anything, "token123").
 		Return(string(userJSON), nil)
 
 	res, err := service.UserByToken(context.Background(), "token123")

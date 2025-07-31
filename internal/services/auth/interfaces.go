@@ -17,5 +17,5 @@ type UserProvider interface {
 type SessionStorer interface {
 	SaveSession(ctx context.Context, token string, userJSON string) error
 	DeleteSession(ctx context.Context, token string) error
-	GetUserByToken(ctx context.Context, token string) (string, error)
+	UserByToken(ctx context.Context, token string) (string, error)
 }
