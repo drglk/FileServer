@@ -86,7 +86,7 @@ func TestGetUserByToken_Success(t *testing.T) {
 
 	repo := New(mockCache, time.Minute)
 
-	result, err := repo.GetUserByToken(context.Background(), "token123")
+	result, err := repo.UserByToken(context.Background(), "token123")
 	assert.NoError(t, err)
 	assert.Equal(t, "user-data", result)
 }
@@ -102,7 +102,7 @@ func TestGetUserByToken_NotFound(t *testing.T) {
 
 	repo := New(mockCache, time.Minute)
 
-	result, err := repo.GetUserByToken(context.Background(), "invalid")
+	result, err := repo.UserByToken(context.Background(), "invalid")
 	assert.ErrorIs(t, err, models.ErrSessionNotFound)
 	assert.Empty(t, result)
 }
@@ -118,7 +118,7 @@ func TestGetUserByToken_Error(t *testing.T) {
 
 	repo := New(mockCache, time.Minute)
 
-	result, err := repo.GetUserByToken(context.Background(), "error-token")
+	result, err := repo.UserByToken(context.Background(), "error-token")
 	assert.Error(t, err)
 	assert.Empty(t, result)
 }

@@ -27,7 +27,7 @@ func (r *repository) DeleteSession(ctx context.Context, token string) error {
 	return r.cache.Del(ctx, token).Err()
 }
 
-func (r *repository) GetUserByToken(ctx context.Context, token string) (string, error) {
+func (r *repository) UserByToken(ctx context.Context, token string) (string, error) {
 	userJSON, err := r.cache.Get(ctx, token).Result()
 	if err != nil {
 		return "", err
