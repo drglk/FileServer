@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fileserver/internal/dto"
 	"fileserver/internal/models"
-	errutil "fileserver/internal/utils/http_errors"
+	errutils "fileserver/internal/utils/http_errors"
 	parseutil "fileserver/internal/utils/parseLimit"
 	"fmt"
 	"io"
@@ -14,21 +14,20 @@ import (
 	"net/http"
 )
 
-func Get(ctx context.Context, log *slog.Logger, w http.ResponseWriter, r *http.Request, auth AuthService, dp DocumentProvider, up UserIDProvider) {
+func Get(ctx context.Context, log *slog.Logger, w http.ResponseWriter, r *http.Request, dp DocumentProvider, up UserIDProvider) {
 	op := pkg + "Get"
 
 	log = log.With(slog.String("op", op))
 
-	token := r.URL.Query().Get("token")
 	login := r.URL.Query().Get("login")
 	key := r.URL.Query().Get("key")
 	value := r.URL.Query().Get("value")
 	limit := parseutil.ParseLimit(r.URL.Query().Get("limit"))
 
-	requester, err := auth.UserByToken(ctx, token)
-	if err != nil {
-		log.Warn("failed get user by token", slog.String("error", err.Error()))
-		errutil.WriteJSONError(w, http.StatusForbidden, "token is invalid")
+	requester, ok := r.Context().Value(models.UserContextKey).(*models.User)
+	if !ok {
+		log.Error("failed to get user from context")
+		errutils.WriteJSONError(w, http.StatusForbidden, models.ErrForbidden.Error())
 		return
 	}
 
@@ -41,7 +40,7 @@ func Get(ctx context.Context, log *slog.Logger, w http.ResponseWriter, r *http.R
 	rawDocs, err := dp.ListDocuments(ctx, requester, login, filter)
 	if err != nil {
 		log.Error("failed to list documents", slog.String("error", err.Error()))
-		errutil.WriteJSONError(w, http.StatusInternalServerError, models.ErrInternal.Error())
+		errutils.WriteJSONError(w, http.StatusInternalServerError, models.ErrInternal.Error())
 		return
 	}
 
@@ -71,17 +70,15 @@ func Get(ctx context.Context, log *slog.Logger, w http.ResponseWriter, r *http.R
 	}
 }
 
-func GetByID(ctx context.Context, log *slog.Logger, w http.ResponseWriter, r *http.Request, docID string, auth AuthService, dp DocumentProvider, up UserIDProvider) {
+func GetByID(ctx context.Context, log *slog.Logger, w http.ResponseWriter, r *http.Request, docID string, dp DocumentProvider, up UserIDProvider) {
 	op := pkg + "GetByID"
 
 	log = log.With(slog.String("op", op))
 
-	token := r.URL.Query().Get("token")
-
-	requester, err := auth.UserByToken(ctx, token)
-	if err != nil {
-		log.Warn("failed get user by token", slog.String("error", err.Error()))
-		errutil.WriteJSONError(w, http.StatusForbidden, "token is invalid")
+	requester, ok := r.Context().Value(models.UserContextKey).(*models.User)
+	if !ok {
+		log.Error("failed to get user from context")
+		errutils.WriteJSONError(w, http.StatusForbidden, models.ErrForbidden.Error())
 		return
 	}
 
@@ -89,11 +86,11 @@ func GetByID(ctx context.Context, log *slog.Logger, w http.ResponseWriter, r *ht
 	if err != nil {
 		if errors.Is(err, models.ErrForbidden) {
 			log.Error("failed to get document by id, permission denied", slog.String("error", err.Error()))
-			errutil.WriteJSONError(w, http.StatusForbidden, models.ErrForbidden.Error())
+			errutils.WriteJSONError(w, http.StatusForbidden, models.ErrForbidden.Error())
 			return
 		}
 		log.Warn("failed to get document by id", slog.String("error", err.Error()))
-		errutil.WriteJSONError(w, http.StatusBadRequest, models.ErrInvalidParams.Error())
+		errutils.WriteJSONError(w, http.StatusBadRequest, models.ErrInvalidParams.Error())
 		return
 	}
 
@@ -114,7 +111,7 @@ func GetByID(ctx context.Context, log *slog.Logger, w http.ResponseWriter, r *ht
 
 	if err := json.Unmarshal(doc.JSONData, &parsed); err != nil {
 		log.Error("invalid JSON in JSONData", slog.String("error", err.Error()))
-		errutil.WriteJSONError(w, http.StatusInternalServerError, "invalid json data")
+		errutils.WriteJSONError(w, http.StatusInternalServerError, "invalid json data")
 		return
 	}
 

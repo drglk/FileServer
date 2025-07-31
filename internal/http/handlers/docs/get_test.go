@@ -1,6 +1,7 @@
 package docs
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fileserver/internal/dto"
@@ -22,9 +23,13 @@ func TestGet_Success(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/docs?token=valid-token", nil)
-	ctx := req.Context()
 
 	user := &models.User{ID: "user1"}
+
+	ctx := context.WithValue(req.Context(), models.UserContextKey, user)
+
+	req = req.WithContext(ctx)
+
 	documents := []*models.Document{
 		{
 			ID:        "doc1",
@@ -37,13 +42,10 @@ func TestGet_Success(t *testing.T) {
 		},
 	}
 
-	mockAuth := new(mockAuth)
-	mockAuth.On("UserByToken", ctx, "valid-token").Return(user, nil)
-
 	mockDP := new(mockDocProvider)
 	mockDP.On("ListDocuments", ctx, user, "", mock.AnythingOfType("models.DocumentFilter")).Return(documents, nil)
 
-	Get(ctx, slog.Default(), w, req, mockAuth, mockDP, nil)
+	Get(ctx, slog.Default(), w, req, mockDP, nil)
 
 	resp := w.Result()
 	defer resp.Body.Close()
@@ -57,7 +59,6 @@ func TestGet_Success(t *testing.T) {
 	assert.Len(t, parsed["data"]["docs"], 1)
 	assert.Equal(t, "doc1", parsed["data"]["docs"][0].ID)
 
-	mockAuth.AssertExpectations(t)
 	mockDP.AssertExpectations(t)
 }
 
@@ -68,16 +69,12 @@ func TestGet_Fail_Unauthorized(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/docs?token=bad-token", nil)
 	ctx := req.Context()
 
-	mockAuth := new(mockAuth)
-	mockAuth.On("UserByToken", ctx, "bad-token").Return((*models.User)(nil), errors.New("unauthorized"))
-
-	Get(ctx, slog.Default(), w, req, mockAuth, nil, nil)
+	Get(ctx, slog.Default(), w, req, nil, nil)
 
 	resp := w.Result()
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
-	mockAuth.AssertExpectations(t)
 }
 
 func TestGet_Fail_ListDocumentsError(t *testing.T) {
@@ -85,24 +82,23 @@ func TestGet_Fail_ListDocumentsError(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/docs?token=valid-token", nil)
-	ctx := req.Context()
 
 	user := &models.User{ID: "user1"}
 
-	mockAuth := new(mockAuth)
-	mockAuth.On("UserByToken", ctx, "valid-token").Return(user, nil)
+	ctx := context.WithValue(req.Context(), models.UserContextKey, user)
+
+	req = req.WithContext(ctx)
 
 	mockDP := new(mockDocProvider)
 	mockDP.On("ListDocuments", ctx, user, "", mock.AnythingOfType("models.DocumentFilter")).Return([]*models.Document{}, errors.New("db error"))
 
-	Get(ctx, slog.Default(), w, req, mockAuth, mockDP, nil)
+	Get(ctx, slog.Default(), w, req, mockDP, nil)
 
 	resp := w.Result()
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 
-	mockAuth.AssertExpectations(t)
 	mockDP.AssertExpectations(t)
 }
 
@@ -111,9 +107,13 @@ func TestGetByID_Success_File(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/docs/doc123?token=valid-token", nil)
-	ctx := req.Context()
 
 	user := &models.User{ID: "user1"}
+
+	ctx := context.WithValue(req.Context(), models.UserContextKey, user)
+
+	req = req.WithContext(ctx)
+
 	doc := &models.Document{
 		ID:     "doc123",
 		Name:   "example.pdf",
@@ -124,13 +124,10 @@ func TestGetByID_Success_File(t *testing.T) {
 	fileContent := "file data"
 	fileReader := io.NopCloser(strings.NewReader(fileContent))
 
-	auth := new(mockAuth)
-	auth.On("UserByToken", ctx, "valid-token").Return(user, nil)
-
 	dp := new(mockDocProvider)
 	dp.On("DocumentByID", ctx, "doc123", user).Return(doc, fileReader, nil)
 
-	GetByID(ctx, slog.Default(), w, req, "doc123", auth, dp, nil)
+	GetByID(ctx, slog.Default(), w, req, "doc123", dp, nil)
 	resp := w.Result()
 	defer resp.Body.Close()
 
@@ -140,7 +137,6 @@ func TestGetByID_Success_File(t *testing.T) {
 	assert.Equal(t, "attachment; filename=\"example.pdf\"", resp.Header.Get("Content-Disposition"))
 	assert.Equal(t, fileContent, string(data))
 
-	auth.AssertExpectations(t)
 	dp.AssertExpectations(t)
 }
 
@@ -149,9 +145,13 @@ func TestGetByID_Success_JSON(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/docs/doc456?token=valid-token", nil)
-	ctx := req.Context()
 
 	user := &models.User{ID: "user1"}
+
+	ctx := context.WithValue(req.Context(), models.UserContextKey, user)
+
+	req = req.WithContext(ctx)
+
 	jsonBody := []byte(`{"key": "value"}`)
 	doc := &models.Document{
 		ID:       "doc456",
@@ -161,13 +161,10 @@ func TestGetByID_Success_JSON(t *testing.T) {
 		JSONData: jsonBody,
 	}
 
-	auth := new(mockAuth)
-	auth.On("UserByToken", ctx, "valid-token").Return(user, nil)
-
 	dp := new(mockDocProvider)
 	dp.On("DocumentByID", ctx, "doc456", user).Return(doc, nil, nil)
 
-	GetByID(ctx, slog.Default(), w, req, "doc456", auth, dp, nil)
+	GetByID(ctx, slog.Default(), w, req, "doc456", dp, nil)
 	resp := w.Result()
 	defer resp.Body.Close()
 
@@ -179,7 +176,6 @@ func TestGetByID_Success_JSON(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "value", result["data"]["key"])
 
-	auth.AssertExpectations(t)
 	dp.AssertExpectations(t)
 }
 
@@ -190,15 +186,11 @@ func TestGetByID_Fail_Forbidden(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/docs/doc123?token=invalid-token", nil)
 	ctx := req.Context()
 
-	auth := new(mockAuth)
-	auth.On("UserByToken", ctx, "invalid-token").Return((*models.User)(nil), errors.New("unauthorized"))
-
-	GetByID(ctx, slog.Default(), w, req, "doc123", auth, nil, nil)
+	GetByID(ctx, slog.Default(), w, req, "doc123", nil, nil)
 	resp := w.Result()
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
-	auth.AssertExpectations(t)
 }
 
 func TestGetByID_Fail_BadParams(t *testing.T) {
@@ -206,22 +198,21 @@ func TestGetByID_Fail_BadParams(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/docs/doc123?token=valid-token", nil)
-	ctx := req.Context()
 
 	user := &models.User{ID: "user1"}
 
-	auth := new(mockAuth)
-	auth.On("UserByToken", ctx, "valid-token").Return(user, nil)
+	ctx := context.WithValue(req.Context(), models.UserContextKey, user)
+
+	req = req.WithContext(ctx)
 
 	dp := new(mockDocProvider)
 	dp.On("DocumentByID", ctx, "doc123", user).Return((*models.Document)(nil), nil, errors.New("bad param"))
 
-	GetByID(ctx, slog.Default(), w, req, "doc123", auth, dp, nil)
+	GetByID(ctx, slog.Default(), w, req, "doc123", dp, nil)
 	resp := w.Result()
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-	auth.AssertExpectations(t)
 	dp.AssertExpectations(t)
 }
 
@@ -230,9 +221,13 @@ func TestGetByID_Fail_InvalidJSON(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/docs/doc789?token=valid-token", nil)
-	ctx := req.Context()
 
 	user := &models.User{ID: "user1"}
+
+	ctx := context.WithValue(req.Context(), models.UserContextKey, user)
+
+	req = req.WithContext(ctx)
+
 	doc := &models.Document{
 		ID:       "doc789",
 		Name:     "corrupt.json",
@@ -241,17 +236,13 @@ func TestGetByID_Fail_InvalidJSON(t *testing.T) {
 		JSONData: []byte(`{invalid json}`),
 	}
 
-	auth := new(mockAuth)
-	auth.On("UserByToken", ctx, "valid-token").Return(user, nil)
-
 	dp := new(mockDocProvider)
 	dp.On("DocumentByID", ctx, "doc789", user).Return(doc, nil, nil)
 
-	GetByID(ctx, slog.Default(), w, req, "doc789", auth, dp, nil)
+	GetByID(ctx, slog.Default(), w, req, "doc789", dp, nil)
 	resp := w.Result()
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-	auth.AssertExpectations(t)
 	dp.AssertExpectations(t)
 }

@@ -15,13 +15,6 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-type mockAuthService struct{ mock.Mock }
-
-func (m *mockAuthService) UserByToken(ctx context.Context, token string) (*models.User, error) {
-	args := m.Called(ctx, token)
-	return args.Get(0).(*models.User), args.Error(1)
-}
-
 type mockDocProvider struct{ mock.Mock }
 
 func (m *mockDocProvider) ListDocuments(ctx context.Context, requester *models.User, login string, filter models.DocumentFilter) ([]*models.Document, error) {
@@ -44,12 +37,12 @@ func TestHead_Success(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodHead, "/api/docs?token=valid&key=name&value=test&limit=2", nil)
 	w := httptest.NewRecorder()
-	ctx := req.Context()
 
 	user := &models.User{ID: "user-id"}
 
-	auth := new(mockAuthService)
-	auth.On("UserByToken", mock.Anything, "valid").Return(user, nil)
+	ctx := context.WithValue(req.Context(), models.UserContextKey, user)
+
+	req = req.WithContext(ctx)
 
 	doc := &models.Document{Name: "test"}
 	docProvider := new(mockDocProvider)
@@ -58,7 +51,7 @@ func TestHead_Success(t *testing.T) {
 	}).Return([]*models.Document{doc}, nil)
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	Head(ctx, logger, w, req, auth, docProvider, new(mockUserIDProvider))
+	Head(ctx, logger, w, req, docProvider, new(mockUserIDProvider))
 
 	resp := w.Result()
 	defer resp.Body.Close()
@@ -67,7 +60,6 @@ func TestHead_Success(t *testing.T) {
 	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
 	assert.Equal(t, "1", resp.Header.Get("X-Documents-Count"))
 
-	auth.AssertExpectations(t)
 	docProvider.AssertExpectations(t)
 }
 
@@ -78,11 +70,8 @@ func TestHead_Forbidden_InvalidToken(t *testing.T) {
 	w := httptest.NewRecorder()
 	ctx := req.Context()
 
-	auth := new(mockAuthService)
-	auth.On("UserByToken", mock.Anything, "bad").Return(&models.User{}, errors.New("invalid"))
-
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	Head(ctx, logger, w, req, auth, new(mockDocProvider), new(mockUserIDProvider))
+	Head(ctx, logger, w, req, new(mockDocProvider), new(mockUserIDProvider))
 
 	resp := w.Result()
 	defer resp.Body.Close()
@@ -95,19 +84,19 @@ func TestHead_InternalError_ListFail(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodHead, "/api/docs?token=valid", nil)
 	w := httptest.NewRecorder()
-	ctx := req.Context()
 
 	user := &models.User{ID: "user-id"}
 
-	auth := new(mockAuthService)
-	auth.On("UserByToken", mock.Anything, "valid").Return(user, nil)
+	ctx := context.WithValue(req.Context(), models.UserContextKey, user)
+
+	req = req.WithContext(ctx)
 
 	docProvider := new(mockDocProvider)
 	docProvider.On("ListDocuments", mock.Anything, user, "", models.DocumentFilter{}).
 		Return([]*models.Document{}, errors.New("db error"))
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	Head(ctx, logger, w, req, auth, docProvider, new(mockUserIDProvider))
+	Head(ctx, logger, w, req, docProvider, new(mockUserIDProvider))
 
 	resp := w.Result()
 	defer resp.Body.Close()
@@ -120,9 +109,13 @@ func TestHeadByID_Success_File(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodHead, "/api/docs/doc123?token=token123", nil)
-	ctx := req.Context()
 
 	user := &models.User{ID: "user1"}
+
+	ctx := context.WithValue(req.Context(), models.UserContextKey, user)
+
+	req = req.WithContext(ctx)
+
 	doc := &models.Document{
 		ID:       "doc123",
 		Name:     "report.pdf",
@@ -132,13 +125,10 @@ func TestHeadByID_Success_File(t *testing.T) {
 		OwnerID:  "user1",
 	}
 
-	auth := new(mockAuth)
-	auth.On("UserByToken", ctx, "token123").Return(user, nil)
-
 	dp := new(mockDocProvider)
 	dp.On("DocumentByID", ctx, "doc123", user).Return(doc, io.NopCloser(strings.NewReader("")), nil)
 
-	HeadByID(ctx, slog.Default(), w, req, "doc123", auth, dp, nil)
+	HeadByID(ctx, slog.Default(), w, req, "doc123", dp, nil)
 
 	resp := w.Result()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -146,7 +136,6 @@ func TestHeadByID_Success_File(t *testing.T) {
 	assert.Equal(t, `attachment; filename="report.pdf"`, resp.Header.Get("Content-Disposition"))
 	assert.Equal(t, "application/pdf", resp.Header.Get("X-Content-Mime"))
 
-	auth.AssertExpectations(t)
 	dp.AssertExpectations(t)
 }
 
@@ -155,9 +144,13 @@ func TestHeadByID_Success_JSON(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodHead, "/api/docs/doc456?token=token456", nil)
-	ctx := req.Context()
 
 	user := &models.User{ID: "user2"}
+
+	ctx := context.WithValue(req.Context(), models.UserContextKey, user)
+
+	req = req.WithContext(ctx)
+
 	doc := &models.Document{
 		ID:       "doc456",
 		Name:     "metadata",
@@ -167,20 +160,16 @@ func TestHeadByID_Success_JSON(t *testing.T) {
 		OwnerID:  "user2",
 	}
 
-	auth := new(mockAuth)
-	auth.On("UserByToken", ctx, "token456").Return(user, nil)
-
 	dp := new(mockDocProvider)
 	dp.On("DocumentByID", ctx, "doc456", user).Return(doc, io.NopCloser(strings.NewReader("")), nil)
 
-	HeadByID(ctx, slog.Default(), w, req, "doc456", auth, dp, nil)
+	HeadByID(ctx, slog.Default(), w, req, "doc456", dp, nil)
 
 	resp := w.Result()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
 	assert.Equal(t, "application/json", resp.Header.Get("X-Content-Mime"))
 
-	auth.AssertExpectations(t)
 	dp.AssertExpectations(t)
 }
 
@@ -191,17 +180,12 @@ func TestHeadByID_Fail_InvalidToken(t *testing.T) {
 	req := httptest.NewRequest(http.MethodHead, "/api/docs/doc123?token=badtoken", nil)
 	ctx := req.Context()
 
-	auth := new(mockAuth)
-	auth.On("UserByToken", ctx, "badtoken").Return((*models.User)(nil), errors.New("invalid token"))
-
 	dp := new(mockDocProvider)
 
-	HeadByID(ctx, slog.Default(), w, req, "doc123", auth, dp, nil)
+	HeadByID(ctx, slog.Default(), w, req, "doc123", dp, nil)
 
 	resp := w.Result()
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
-
-	auth.AssertExpectations(t)
 }
 
 func TestHeadByID_Fail_Forbidden(t *testing.T) {
@@ -209,12 +193,12 @@ func TestHeadByID_Fail_Forbidden(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodHead, "/api/docs/doc123?token=token123", nil)
-	ctx := req.Context()
 
 	user := &models.User{ID: "user1"}
 
-	auth := new(mockAuth)
-	auth.On("UserByToken", ctx, "token123").Return(user, nil)
+	ctx := context.WithValue(req.Context(), models.UserContextKey, user)
+
+	req = req.WithContext(ctx)
 
 	dp := new(mockDocProvider)
 
@@ -222,12 +206,11 @@ func TestHeadByID_Fail_Forbidden(t *testing.T) {
 
 	dp.On("DocumentByID", ctx, "doc123", user).Return((*models.Document)(nil), mockFile, models.ErrForbidden)
 
-	HeadByID(ctx, slog.Default(), w, req, "doc123", auth, dp, nil)
+	HeadByID(ctx, slog.Default(), w, req, "doc123", dp, nil)
 
 	resp := w.Result()
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 
-	auth.AssertExpectations(t)
 	dp.AssertExpectations(t)
 }
 
@@ -236,12 +219,12 @@ func TestHeadByID_Fail_UnknownError(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodHead, "/api/docs/doc123?token=token123", nil)
-	ctx := req.Context()
 
 	user := &models.User{ID: "user1"}
 
-	auth := new(mockAuth)
-	auth.On("UserByToken", ctx, "token123").Return(user, nil)
+	ctx := context.WithValue(req.Context(), models.UserContextKey, user)
+
+	req = req.WithContext(ctx)
 
 	dp := new(mockDocProvider)
 
@@ -249,11 +232,10 @@ func TestHeadByID_Fail_UnknownError(t *testing.T) {
 
 	dp.On("DocumentByID", ctx, "doc123", user).Return((*models.Document)(nil), mockFile, errors.New("db error"))
 
-	HeadByID(ctx, slog.Default(), w, req, "doc123", auth, dp, nil)
+	HeadByID(ctx, slog.Default(), w, req, "doc123", dp, nil)
 
 	resp := w.Result()
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
-	auth.AssertExpectations(t)
 	dp.AssertExpectations(t)
 }

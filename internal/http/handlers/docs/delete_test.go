@@ -24,19 +24,19 @@ func (m *mockDocDeleter) DeleteDocument(ctx context.Context, docID string, user 
 func TestDelete_Success(t *testing.T) {
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodDelete, "/api/docs/doc42?token=tok123", nil)
-	ctx := req.Context()
 
 	user := &models.User{ID: "u1"}
 	docID := "doc42"
 	token := "tok123"
 
-	auth := new(mockAuth)
-	auth.On("UserByToken", ctx, token).Return(user, nil)
+	ctx := context.WithValue(req.Context(), models.UserContextKey, user)
+
+	req = req.WithContext(ctx)
 
 	deleter := new(mockDocDeleter)
 	deleter.On("DeleteDocument", ctx, docID, user).Return(nil)
 
-	Delete(ctx, slog.Default(), w, req, docID, auth, deleter, nil)
+	Delete(ctx, slog.Default(), w, req, docID, deleter, nil)
 
 	resp := w.Result()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -46,7 +46,6 @@ func TestDelete_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, true, parsed["response"][token])
 
-	auth.AssertExpectations(t)
 	deleter.AssertExpectations(t)
 }
 
@@ -55,46 +54,42 @@ func TestDelete_Fail_InvalidToken(t *testing.T) {
 	req := httptest.NewRequest(http.MethodDelete, "/api/docs/doc42?token=bad", nil)
 	ctx := req.Context()
 
-	auth := new(mockAuth)
-	auth.On("UserByToken", ctx, "bad").Return((*models.User)(nil), errors.New("unauthorized"))
-
-	Delete(ctx, slog.Default(), w, req, "doc42", auth, nil, nil)
+	Delete(ctx, slog.Default(), w, req, "doc42", nil, nil)
 	assert.Equal(t, http.StatusForbidden, w.Result().StatusCode)
-	auth.AssertExpectations(t)
 }
 
 func TestDelete_Fail_Forbidden(t *testing.T) {
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodDelete, "/api/docs/doc42?token=tok", nil)
-	ctx := req.Context()
 
 	user := &models.User{ID: "u2"}
-	auth := new(mockAuth)
-	auth.On("UserByToken", ctx, "tok").Return(user, nil)
+
+	ctx := context.WithValue(req.Context(), models.UserContextKey, user)
+
+	req = req.WithContext(ctx)
 
 	deleter := new(mockDocDeleter)
 	deleter.On("DeleteDocument", ctx, "doc42", user).Return(models.ErrForbidden)
 
-	Delete(ctx, slog.Default(), w, req, "doc42", auth, deleter, nil)
+	Delete(ctx, slog.Default(), w, req, "doc42", deleter, nil)
 	assert.Equal(t, http.StatusForbidden, w.Result().StatusCode)
-	auth.AssertExpectations(t)
 	deleter.AssertExpectations(t)
 }
 
 func TestDelete_Fail_GenericError(t *testing.T) {
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodDelete, "/api/docs/doc42?token=tok", nil)
-	ctx := req.Context()
 
 	user := &models.User{ID: "u2"}
-	auth := new(mockAuth)
-	auth.On("UserByToken", ctx, "tok").Return(user, nil)
+
+	ctx := context.WithValue(req.Context(), models.UserContextKey, user)
+
+	req = req.WithContext(ctx)
 
 	deleter := new(mockDocDeleter)
 	deleter.On("DeleteDocument", ctx, "doc42", user).Return(errors.New("unexpected"))
 
-	Delete(ctx, slog.Default(), w, req, "doc42", auth, deleter, nil)
+	Delete(ctx, slog.Default(), w, req, "doc42", deleter, nil)
 	assert.Equal(t, http.StatusBadRequest, w.Result().StatusCode)
-	auth.AssertExpectations(t)
 	deleter.AssertExpectations(t)
 }
