@@ -24,12 +24,13 @@ func StartServer(
 	documentService DocumentService,
 	authService AuthService,
 	userService UserService,
+	sessionStorer SessionStorer,
 ) error {
 	r := mux.NewRouter()
 
 	r.Use(middleware.Logger(log))
 
-	setupRoutes(r, log, authService, documentService, userService)
+	setupRoutes(r, log, authService, documentService, userService, sessionStorer)
 
 	srv := &http.Server{
 		Addr:         cfg.Address,
@@ -70,7 +71,7 @@ func StartServer(
 	}
 }
 
-func setupRoutes(r *mux.Router, log *slog.Logger, auth AuthService, doc DocumentService, us UserService) {
+func setupRoutes(r *mux.Router, log *slog.Logger, auth AuthService, doc DocumentService, us UserService, sessionStorer SessionStorer) {
 	// POST user
 	r.HandleFunc("/api/register", func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -94,43 +95,47 @@ func setupRoutes(r *mux.Router, log *slog.Logger, auth AuthService, doc Document
 	// POST doc
 	r.HandleFunc("/api/docs", func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		docs.Upload(ctx, log, w, r, auth, doc, us)
+		docs.Upload(ctx, log, w, r, sessionStorer, doc, us)
 	}).Methods(http.MethodPost)
 
+	protected := r.NewRoute().Subrouter()
+
+	protected.Use(middleware.Auth(log, sessionStorer))
+
 	// GET docs
-	r.HandleFunc("/api/docs", func(w http.ResponseWriter, r *http.Request) {
+	protected.HandleFunc("/api/docs", func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		docs.Get(ctx, log, w, r, auth, doc, us)
+		docs.Get(ctx, log, w, r, doc, us)
 	}).Methods(http.MethodGet)
 
 	// GET doc by id
-	r.HandleFunc("/api/docs/{id}", func(w http.ResponseWriter, r *http.Request) {
+	protected.HandleFunc("/api/docs/{id}", func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		vars := mux.Vars(r)
 		docID := vars["id"]
-		docs.GetByID(ctx, log, w, r, docID, auth, doc, us)
+		docs.GetByID(ctx, log, w, r, docID, doc, us)
 	}).Methods(http.MethodGet)
 
 	// HEAD docs
-	r.HandleFunc("/api/docs", func(w http.ResponseWriter, r *http.Request) {
+	protected.HandleFunc("/api/docs", func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		docs.Head(ctx, log, w, r, auth, doc, us)
+		docs.Head(ctx, log, w, r, doc, us)
 	}).Methods(http.MethodHead)
 
 	// HEAD doc by ID
-	r.HandleFunc("/api/docs/{id}", func(w http.ResponseWriter, r *http.Request) {
+	protected.HandleFunc("/api/docs/{id}", func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		vars := mux.Vars(r)
 		docID := vars["id"]
-		docs.HeadByID(ctx, log, w, r, docID, auth, doc, us)
+		docs.HeadByID(ctx, log, w, r, docID, doc, us)
 	}).Methods(http.MethodHead)
 
 	// DELETE doc by id
-	r.HandleFunc("/api/docs/{id}", func(w http.ResponseWriter, r *http.Request) {
+	protected.HandleFunc("/api/docs/{id}", func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		vars := mux.Vars(r)
 		docID := vars["id"]
-		docs.Delete(ctx, log, w, r, docID, auth, doc, us)
+		docs.Delete(ctx, log, w, r, docID, doc, us)
 	}).Methods(http.MethodDelete)
 
 	// Not allowed

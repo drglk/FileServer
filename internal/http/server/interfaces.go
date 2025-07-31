@@ -24,3 +24,7 @@ type DocumentService interface {
 type UserService interface {
 	UserIDByLogin(ctx context.Context, login string) (string, error)
 }
+
+type SessionStorer interface {
+	UserByToken(ctx context.Context, login string) (*models.User, error)
+}
