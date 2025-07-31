@@ -21,6 +21,7 @@ type App struct {
 	AuthService     AuthService
 	UserService     UserService
 	DocumentService DocumentService
+	SessionStorer   SessionStorer
 }
 
 func NewApp(ctx context.Context, log *slog.Logger, dbCfg config.DB, cacheConfig config.Cache, fileStorageCfg config.FileStorage, adminToken string) (*App, error) {
@@ -61,5 +62,6 @@ func NewApp(ctx context.Context, log *slog.Logger, dbCfg config.DB, cacheConfig 
 		AuthService:     authService,
 		UserService:     userService,
 		DocumentService: documentService,
+		SessionStorer:   authService,
 	}, nil
 }
