@@ -1,7 +1,7 @@
 package models
 
-type IDKey int
+type ContextKey string
 
-const (
-	UserID IDKey = iota
+var (
+	UserContextKey ContextKey = "user_context_key"
 )
