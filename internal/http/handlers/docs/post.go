@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fileserver/internal/dto"
 	"fileserver/internal/models"
-	utils "fileserver/internal/utils/http_errors"
+	errutils "fileserver/internal/utils/http_errors"
 	"io"
 	"log/slog"
 	"mime/multipart"
@@ -19,7 +19,7 @@ func Upload(ctx context.Context, log *slog.Logger, w http.ResponseWriter, r *htt
 
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
 		log.Error("failed to parse multipart form", slog.String("error", err.Error()))
-		utils.WriteJSONError(w, http.StatusBadRequest, "failed to parse multipart form")
+		errutils.WriteJSONError(w, http.StatusBadRequest, "failed to parse multipart form")
 		return
 	}
 
@@ -29,14 +29,14 @@ func Upload(ctx context.Context, log *slog.Logger, w http.ResponseWriter, r *htt
 
 	if err := json.Unmarshal([]byte(metaPart), &meta); err != nil {
 		log.Error("failed to unmarshal meta", slog.String("error", err.Error()))
-		utils.WriteJSONError(w, http.StatusBadRequest, "invalid meta json")
+		errutils.WriteJSONError(w, http.StatusBadRequest, "invalid meta json")
 		return
 	}
 
 	requester, err := auth.UserByToken(ctx, meta.Token)
 	if err != nil {
 		log.Warn("failed get user by token", slog.String("error", err.Error()))
-		utils.WriteJSONError(w, http.StatusForbidden, "token is invalid")
+		errutils.WriteJSONError(w, http.StatusForbidden, "token is invalid")
 		return
 	}
 
@@ -50,7 +50,7 @@ func Upload(ctx context.Context, log *slog.Logger, w http.ResponseWriter, r *htt
 
 	if len(jsonData) > 0 && !json.Valid(jsonData) {
 		log.Warn("invalid json body")
-		utils.WriteJSONError(w, http.StatusBadRequest, "invalid JSON body")
+		errutils.WriteJSONError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -60,7 +60,7 @@ func Upload(ctx context.Context, log *slog.Logger, w http.ResponseWriter, r *htt
 		var err error
 		file, _, err = r.FormFile("file")
 		if err != nil {
-			utils.WriteJSONError(w, http.StatusBadRequest, "failed upload error")
+			errutils.WriteJSONError(w, http.StatusBadRequest, "failed upload error")
 			return
 		}
 
@@ -92,7 +92,7 @@ func Upload(ctx context.Context, log *slog.Logger, w http.ResponseWriter, r *htt
 	_, err = du.UploadDocument(ctx, requester, &doc, file)
 	if err != nil {
 		log.Error("failed to upload document", slog.String("error", err.Error()))
-		utils.WriteJSONError(w, http.StatusInternalServerError, models.ErrInternal.Error())
+		errutils.WriteJSONError(w, http.StatusInternalServerError, models.ErrInternal.Error())
 		return
 	}
 
