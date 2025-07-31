@@ -31,7 +31,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = server.StartServer(ctx, &cfg.HTTPServer, log, app.DocumentService, app.AuthService, app.UserService)
+	err = server.StartServer(ctx, &cfg.HTTPServer, log, app.DocumentService, app.AuthService, app.UserService, app.SessionStorer)
 	if err != nil {
 		log.Error("failed to start server", "error", err)
 		os.Exit(1)
